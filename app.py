@@ -2,11 +2,10 @@
 Medical Triage LiveKit Agent
 
 Responsibilities:
-- Create/destroy LiveKit rooms based on hardware session flags
 - Handle participant joining
 - Audio ↔ Text conversion (STT/TTS)
 - Forward conversation data to LLM backend for classification
-- Send SMS alerts when emergency is confirmed by council
+- Trigger emergency alerts (call + SMS via Twilio) when emergency confirmed
 """
 
 import asyncio
@@ -14,10 +13,10 @@ import aiohttp
 import logging
 import os
 import json
-import base64
 from dataclasses import dataclass, field
 from typing import Optional
 from datetime import datetime
+from pathlib import Path
 
 from livekit import rtc, api
 from livekit.agents import (
@@ -32,6 +31,11 @@ from livekit.agents import (
 )
 from livekit.agents.llm import function_tool
 from livekit.plugins import deepgram, cartesia, silero
+from dotenv import load_dotenv
+
+# Load environment variables
+env_path = Path(__file__).parent / ".env"
+load_dotenv(env_path)
 
 logger = logging.getLogger("medical-triage-agent")
 logger.setLevel(logging.INFO)
@@ -43,21 +47,15 @@ class Config:
     # LLM Backend API
     llm_backend_url: str = os.getenv("LLM_BACKEND_URL", "http://localhost:8000")
     classification_endpoint: str = "/api/classify"
-    conversation_endpoint: str = "/api/conversation"
     council_endpoint: str = "/api/council"
     
-    # SMS Service
-    sms_service_url: str = os.getenv("SMS_SERVICE_URL", "http://localhost:8001")
-    sms_endpoint: str = "/api/send-sms"
-    
-    # Emergency contacts (could be fetched per patient)
-    default_emergency_contacts: list = field(default_factory=lambda: [
-        os.getenv("EMERGENCY_CONTACT_1", "+1234567890"),
-    ])
+    # Room Manager API (for Twilio alerts)
+    room_manager_url: str = os.getenv("ROOM_MANAGER_URL", "http://localhost:8080")
+    emergency_alert_endpoint: str = "/session/emergency-alert"
     
     # Thresholds
     emergency_categories: list = field(default_factory=lambda: ["CRITICAL", "EMERGENCY"])
-    
+
 
 config = Config()
 
@@ -65,13 +63,15 @@ config = Config()
 @dataclass
 class SessionState:
     """Tracks the state of a patient session"""
+    room_name: Optional[str] = None
     patient_id: Optional[str] = None
     location: Optional[str] = None
     conversation_history: list = field(default_factory=list)
-    current_image: Optional[str] = None  # Base64 encoded
+    current_image: Optional[str] = None
     session_start: datetime = field(default_factory=datetime.now)
     is_emergency: bool = False
     emergency_confirmed: bool = False
+    alerts_triggered: bool = False
     council_response: Optional[dict] = None
 
 
@@ -83,7 +83,7 @@ class MedicalTriageAgent(Agent):
     - Speech-to-text conversion of patient input
     - Forwarding to LLM backend for classification/conversation
     - Text-to-speech for responses
-    - SMS alerts for emergencies
+    - Triggering emergency alerts (call + SMS) via Twilio
     """
     
     def __init__(self) -> None:
@@ -117,7 +117,7 @@ class MedicalTriageAgent(Agent):
         Flow:
         1. Add user message to conversation history
         2. Send to LLM backend for classification
-        3. If emergency → trigger council → send SMS
+        3. If emergency → trigger council → send alerts (call + SMS)
         4. Return response for TTS
         """
         if not new_message.strip():
@@ -126,7 +126,7 @@ class MedicalTriageAgent(Agent):
         # Add to conversation history
         self.session_state.conversation_history.append({
             "human": new_message,
-            "assistant": None  # Will be filled with response
+            "assistant": None
         })
         
         try:
@@ -144,15 +144,16 @@ class MedicalTriageAgent(Agent):
                 council_response = await self._invoke_council(payload)
                 self.session_state.council_response = council_response
                 
-                # Check if council confirms emergency (majority vote or threshold)
+                # Check if council confirms emergency
                 if self._council_confirms_emergency(council_response):
                     self.session_state.emergency_confirmed = True
                     
-                    # Step 3: Send SMS alert
-                    await self._send_emergency_sms(council_response)
+                    # Step 3: Trigger alerts (call + SMS via Twilio)
+                    await self._trigger_emergency_alerts(council_response)
                     
                     response_text = council_response.get("response", 
-                        "This is an emergency. Help is being dispatched. Please stay calm.")
+                        "This is an emergency. I'm alerting medical staff right now. "
+                        "Help is on the way. Please stay calm and stay where you are.")
                 else:
                     # Council didn't confirm - downgrade
                     logger.info("Council did not confirm emergency")
@@ -177,7 +178,6 @@ class MedicalTriageAgent(Agent):
     
     def _build_llm_payload(self) -> dict:
         """Build the payload to send to LLM backend"""
-        # Format conversation history as expected by backend
         formatted_history = []
         for turn in self.session_state.conversation_history:
             if turn.get("assistant") and turn.get("human"):
@@ -186,9 +186,8 @@ class MedicalTriageAgent(Agent):
                     "human": turn["human"]
                 })
             elif turn.get("human"):
-                # Current turn - human spoke but no assistant response yet
                 formatted_history.append({
-                    "assistant": "",  # Placeholder
+                    "assistant": "",
                     "human": turn["human"]
                 })
         
@@ -198,7 +197,6 @@ class MedicalTriageAgent(Agent):
             "location": self.session_state.location or "UNKNOWN",
         }
         
-        # Include image if available
         if self.session_state.current_image:
             payload["image"] = self.session_state.current_image
         
@@ -229,16 +227,15 @@ class MedicalTriageAgent(Agent):
                     return await response.json()
                 else:
                     logger.error(f"Council API error: {response.status}")
-                    # Fail safe - treat as confirmed emergency
                     return {
-                        "response": "Emergency services have been notified. Please stay calm.",
+                        "response": "Emergency help is being alerted. Please stay calm.",
                         "urgency": "HIGH",
                         "confidence": 0.8
                     }
         except Exception as e:
             logger.error(f"Council request failed: {e}")
             return {
-                "response": "Emergency services have been notified. Please stay calm.",
+                "response": "Emergency help is being alerted. Please stay calm.",
                 "urgency": "HIGH",
                 "confidence": 0.8
             }
@@ -250,147 +247,86 @@ class MedicalTriageAgent(Agent):
         """
         votes = council_response.get("council_votes", {})
         if not votes:
-            # No votes - use top-level urgency
             return council_response.get("urgency") == "HIGH"
         
         high_votes = sum(1 for v in votes.values() if v.get("urgency") == "HIGH")
         total_votes = len(votes)
         
-        # Majority rule
         if high_votes > total_votes / 2:
             return True
         
-        # Or high average confidence
         avg_confidence = sum(v.get("confidence", 0) for v in votes.values()) / total_votes
         return avg_confidence > 0.85
     
-    async def _send_emergency_sms(self, council_response: dict) -> None:
-        """Send SMS alert for confirmed emergency"""
-        url = f"{config.sms_service_url}{config.sms_endpoint}"
+    async def _trigger_emergency_alerts(self, council_response: dict) -> None:
+        """Trigger emergency alerts (call + SMS) via Room Manager / Twilio"""
         
-        sms_payload = {
-            "patient_id": self.session_state.patient_id,
-            "location": self.session_state.location,
+        if self.session_state.alerts_triggered:
+            logger.info("Alerts already triggered for this session")
+            return
+        
+        if not self.session_state.room_name:
+            logger.error("Cannot trigger alerts: room_name not set")
+            return
+        
+        url = f"{config.room_manager_url}{config.emergency_alert_endpoint}"
+        
+        alert_payload = {
+            "room_name": self.session_state.room_name,
+            "assessment": council_response.get("response", "Medical emergency detected"),
             "urgency": council_response.get("urgency", "HIGH"),
-            "assessment": council_response.get("response", "Emergency detected"),
-            "confidence": council_response.get("confidence", 0.9),
-            "council_votes": council_response.get("council_votes", {}),
-            "trace_id": council_response.get("trace_id"),
-            "contacts": config.default_emergency_contacts,
-            "timestamp": datetime.now().isoformat()
+            "send_sms": True,
+            "make_call": True
         }
         
         try:
-            async with self.http_session.post(url, json=sms_payload) as response:
+            async with self.http_session.post(url, json=alert_payload) as response:
                 if response.status == 200:
-                    logger.info(f"SMS sent successfully for patient {self.session_state.patient_id}")
+                    result = await response.json()
+                    self.session_state.alerts_triggered = True
+                    logger.info(f"Emergency alerts triggered: {result}")
                 else:
-                    logger.error(f"SMS API error: {response.status}")
+                    error_text = await response.text()
+                    logger.error(f"Alert API error: {response.status} - {error_text}")
         except Exception as e:
-            logger.error(f"SMS request failed: {e}")
+            logger.error(f"Alert request failed: {e}")
     
-    # Tools for session management (called from hardware signals)
     @function_tool
-    async def set_patient_info(
+    async def set_session_info(
         self,
+        room_name: str,
         patient_id: str,
         location: str,
         image_base64: Optional[str] = None
     ) -> str:
-        """
-        Set patient information for the session.
-        Called when hardware initiates a session.
-        
-        Args:
-            patient_id: The patient's ID
-            location: Station/location identifier
-            image_base64: Optional base64 encoded image from camera
-        """
+        """Set session information when agent joins a room."""
+        self.session_state.room_name = room_name
         self.session_state.patient_id = patient_id
         self.session_state.location = location
         if image_base64:
             self.session_state.current_image = image_base64
         
-        logger.info(f"Patient info set: {patient_id} at {location}")
+        logger.info(f"Session info set: room={room_name}, patient={patient_id}")
         return f"Session initialized for patient {patient_id}"
     
     @function_tool
     async def update_image(self, image_base64: str) -> str:
-        """
-        Update the current image for visual assessment.
-        Called when hardware sends new camera frame.
-        
-        Args:
-            image_base64: Base64 encoded image data
-        """
+        """Update the current image for visual assessment."""
         self.session_state.current_image = image_base64
         return "Image updated"
     
     @function_tool
-    async def end_session(self) -> str:
-        """
-        End the current patient session.
-        Called when hardware signals session end (flag off).
-        """
-        patient_id = self.session_state.patient_id
-        
-        # Log session summary
-        logger.info(f"Session ended for {patient_id}: "
-                   f"Emergency={self.session_state.is_emergency}, "
-                   f"Confirmed={self.session_state.emergency_confirmed}, "
-                   f"Turns={len(self.session_state.conversation_history)}")
-        
-        # Reset state for next session
-        self.session_state = SessionState()
-        
-        return f"Session ended for patient {patient_id}"
-
-
-# Room management functions
-async def create_room(room_name: str) -> dict:
-    """Create a new LiveKit room for a hardware session"""
-    livekit_api = api.LiveKitAPI(
-        url=os.getenv("LIVEKIT_URL", "ws://localhost:7880"),
-        api_key=os.getenv("LIVEKIT_API_KEY"),
-        api_secret=os.getenv("LIVEKIT_API_SECRET"),
-    )
-    
-    try:
-        room = await livekit_api.room.create_room(
-            api.CreateRoomRequest(
-                name=room_name,
-                empty_timeout=300,  # 5 minutes
-                max_participants=3,  # Hardware + Agent + optional observer
-            )
-        )
-        logger.info(f"Room created: {room_name}")
-        return {"status": "created", "room": room_name}
-    except Exception as e:
-        logger.error(f"Failed to create room {room_name}: {e}")
-        return {"status": "error", "message": str(e)}
-    finally:
-        await livekit_api.aclose()
-
-
-async def delete_room(room_name: str) -> dict:
-    """Delete a LiveKit room when hardware session ends"""
-    livekit_api = api.LiveKitAPI(
-        url=os.getenv("LIVEKIT_URL", "ws://localhost:7880"),
-        api_key=os.getenv("LIVEKIT_API_KEY"),
-        api_secret=os.getenv("LIVEKIT_API_SECRET"),
-    )
-    
-    try:
-        await livekit_api.room.delete_room(
-            api.DeleteRoomRequest(room=room_name)
-        )
-        logger.info(f"Room deleted: {room_name}")
-        return {"status": "deleted", "room": room_name}
-    except Exception as e:
-        logger.error(f"Failed to delete room {room_name}: {e}")
-        return {"status": "error", "message": str(e)}
-    finally:
-        await livekit_api.aclose()
+    async def get_session_status(self) -> str:
+        """Get current session status"""
+        return json.dumps({
+            "room_name": self.session_state.room_name,
+            "patient_id": self.session_state.patient_id,
+            "location": self.session_state.location,
+            "is_emergency": self.session_state.is_emergency,
+            "emergency_confirmed": self.session_state.emergency_confirmed,
+            "alerts_triggered": self.session_state.alerts_triggered,
+            "conversation_turns": len(self.session_state.conversation_history)
+        })
 
 
 def prewarm(proc: JobProcess) -> None:
@@ -402,26 +338,42 @@ async def entrypoint(ctx: JobContext) -> None:
     """Main entry point for the agent"""
     await ctx.connect()
     
-    logger.info(f"Connected to room: {ctx.room.name}")
+    room_name = ctx.room.name
+    logger.info(f"Connected to room: {room_name}")
+    
+    # Parse room metadata for patient info
+    patient_id = "UNKNOWN"
+    location = "UNKNOWN"
+    
+    try:
+        if ctx.room.metadata:
+            metadata = json.loads(ctx.room.metadata)
+            patient_id = metadata.get("patient_id", "UNKNOWN")
+            location = metadata.get("location", "UNKNOWN")
+    except Exception as e:
+        logger.warning(f"Could not parse room metadata: {e}")
     
     # Create the agent
     agent = MedicalTriageAgent()
     
+    # Set session info from room
+    agent.session_state.room_name = room_name
+    agent.session_state.patient_id = patient_id
+    agent.session_state.location = location
+    
     # Configure audio input/output
     session = AgentSession(
         vad=ctx.proc.userdata["vad"],
-        stt=deepgram.STT(),  # Speech-to-text
-        tts=cartesia.TTS(),  # Text-to-speech
-        llm=None,  # We handle LLM calls manually through HTTP
+        stt=deepgram.STT(),
+        tts=cartesia.TTS(),
+        llm=None,  # We handle LLM calls manually
     )
     
     # Start the agent session
     await session.start(
         agent=agent,
         room=ctx.room,
-        room_input_options=RoomInputOptions(
-            # Subscribe to audio from hardware participant
-        ),
+        room_input_options=RoomInputOptions(),
     )
     
     # Initial greeting
