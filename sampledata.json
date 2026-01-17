@@ -1,0 +1,73 @@
+{
+    "_id": {
+        "$oid": "696bf0fc45f45a9184f832ba"
+    },
+    "timestamp": {
+        "$date": "2026-01-17T20:28:44.627Z"
+    },
+    "patient_id": "TEST0041",
+    "location": "Station-A",
+    "input": {
+        "text": "Q1: Can you describe the pain? Is it sharp, dull, burning, or does it feel like pressure or tightness?\nA1: it feels like a pressure\nQ2: Where exactly is the pain located, and does it spread to other areas like your arm, jaw, neck, or back?\nA2: it is happening in my back\nQ3: When did the pain start, and how long does it last? Is it constant or does it come and go?\nA3: it comes and goes\nQ4: What makes the pain better or worse? Does it change with breathing, eating, physical activity, or rest?\nA4: it changes with taking rest\nQ5: Do you have any other symptoms along with the chest pain, such as shortness of breath, sweating, nausea, dizziness, or palpitations?\nA5: I am having a little bit of nausea",
+        "has_image": true,
+        "is_conversation": true,
+        "qa_pairs_count": 5,
+        "image_storage": {
+            "url": "https://sfo3.digitaloceanspaces.com/testaid/images/2026/01/TEST0041/f87326dd-5347-4168-a9e6-51844fb76493.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=DO00Z8WBXZGT8A6LKHZH%2F20260117%2Fsfo3%2Fs3%2Faws4_request&X-Amz-Date=20260117T202811Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=a51ae8c2a722ea746ede17951008667eceaea93b6298ff91d87c5285e07b482d",
+            "cdn_url": "https://testaid.sfo3.cdn.digitaloceanspaces.com/images/2026/01/TEST0041/f87326dd-5347-4168-a9e6-51844fb76493.jpg",
+            "key": "images/2026/01/TEST0041/f87326dd-5347-4168-a9e6-51844fb76493.jpg",
+            "size": 135178,
+            "content_type": "image/jpeg",
+            "bucket": "testaid",
+            "region": "sfo3"
+        }
+    },
+    "output": {
+        "response": "Assessment: Pressure-like back pain with nausea could be heart-related (ischemia/heart attack).  \nUrgency: Emergency.  \nAction: Call emergency services now; chew aspirin if not allergic and wait resting, don’t drive.",
+        "urgency": "HIGH",
+        "confidence": 0.9
+    },
+    "council_votes": {
+        "gpt4": {
+            "urgency": "HIGH",
+            "confidence": 0.9,
+            "model": "GPT-4o"
+        },
+        "claude": {
+            "urgency": "HIGH",
+            "confidence": 0.92,
+            "model": "Claude Sonnet 4"
+        },
+        "gemini": {
+            "urgency": "HIGH",
+            "confidence": 0.88,
+            "model": "Gemini 2.0 Flash"
+        }
+    },
+    "route": "council",
+    "evaluations": {
+        "word_count": {
+            "count": 28,
+            "within_limit": true,
+            "limit": 30
+        },
+        "urgency_alignment": {
+            "expected_urgency": "HIGH or EMERGENCY",
+            "assigned_urgency": "HIGH",
+            "is_aligned": true,
+            "has_emergency_keywords": true
+        },
+        "council_consensus": {
+            "consensus_score": 1,
+            "urgency_agreement": 1,
+            "confidence_variance": 0.0003,
+            "num_models": 3
+        },
+        "guardrails_passed": true
+    },
+    "trace_id": "bc47d98f-b9a3-4ef1-9a41-a6083339434b",
+    "experiment_variants": {
+        "prompt_style": "control"
+    },
+    "processing_time": 33.52
+}

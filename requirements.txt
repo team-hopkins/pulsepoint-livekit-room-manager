@@ -19,3 +19,5 @@ twilio>=8.10.0
 
 # Utilities
 python-dotenv>=1.0.0
+motor
+pymongo
