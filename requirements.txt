@@ -1,5 +1,10 @@
-Flask>=2.0
-requests>=2.28
-python-dotenv>=1.0
-PyJWT>=2.8
-livekit>=1.0
+Flask
+requests
+python-dotenv
+PyJWT
+livekit
+livekit-api
+fastapi
+uvicorn
+pydantic
+httpx
