@@ -1,0 +1,35 @@
+name: livekit-medical-agent
+region: nyc
+
+services:
+  - name: medical-agent
+    github:
+      repo: team-hopkins/nexhacks-livekit
+      branch: main
+      deploy_on_push: true
+
+    source_dir: /
+
+    dockerfile_path: Dockerfile.agent
+
+    instance_count: 1
+    instance_size_slug: basic-xxs
+
+    envs:
+      - key: LIVEKIT_URL
+        value: wss://abcd-vaim7omd.livekit.cloud
+      - key: LIVEKIT_API_KEY
+        value: APItPcruu8JgyuB
+      - key: LIVEKIT_API_SECRET
+        value: ${LIVEKIT_API_SECRET}
+        type: SECRET
+      - key: OPENAI_API_KEY
+        value: ${OPENAI_API_KEY}
+        type: SECRET
+      - key: MONGODB_URL
+        value: ${MONGODB_URL}
+        type: SECRET
+      - key: DATABASE_NAME
+        value: carepoint_medical
+      - key: COLLECTION_NAME
+        value: consultations
