@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { Room, RoomEvent } from 'livekit-client';
-import { RoomAudioRenderer, RoomContext } from '@livekit/components-react';
-import { SessionView } from '@/components/session-view';
+import { useEffect, useMemo, useState } from "react";
+import { Room, RoomEvent } from "livekit-client";
+import { RoomAudioRenderer, RoomContext } from "@livekit/components-react";
+import { SessionView } from "@/components/session-view";
 
 interface PatientSummary {
   patient_id: string;
@@ -13,16 +13,9 @@ interface PatientSummary {
   updated_at?: string;
 }
 
-interface JoinInfo {
-  doctor_token: string;
-  livekit_url: string;
-  patient_link?: string;
-  room_id?: string;
-}
-
-export default function Page() {
+export default function DoctorDashboard() {
   const room = useMemo(() => new Room(), []);
-  const doctorId = 'DOCTOR_001';
+  const doctorId = "DOCTOR_001";
 
   const [patients, setPatients] = useState<PatientSummary[]>([]);
   const [selected, setSelected] = useState<PatientSummary | null>(null);
@@ -30,7 +23,6 @@ export default function Page() {
   const [joining, setJoining] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [joinInfo, setJoinInfo] = useState<JoinInfo | null>(null);
 
   // Fetch patient list on load
   useEffect(() => {
@@ -38,17 +30,19 @@ export default function Page() {
       setLoadingList(true);
       setError(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const res = await fetch(`${baseUrl}/patients`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          cache: 'no-store',
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
         });
         if (!res.ok) throw new Error(`Failed to load patients (status ${res.status})`);
         const data = await res.json();
         setPatients(data.patients || []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load patients');
+        setError(err instanceof Error ? err.message : "Failed to load patients");
       } finally {
         setLoadingList(false);
       }
@@ -72,19 +66,27 @@ export default function Page() {
   // Connect when session started
   useEffect(() => {
     let aborted = false;
-    if (sessionStarted && room.state === 'disconnected' && selected && joinInfo) {
+    if (sessionStarted && room.state === "disconnected" && selected) {
       const connectDoctor = async () => {
         setJoining(true);
         setError(null);
         try {
-          await room.connect(joinInfo.livekit_url, joinInfo.doctor_token);
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          const res = await fetch(
+            `${baseUrl}/get-doctor-token?patient_id=${selected.patient_id}&doctor_id=${doctorId}`,
+            { method: "POST" }
+          );
+          if (!res.ok) throw new Error("Failed to get doctor token");
+          const data = await res.json();
+
+          await room.connect(data.livekit_url, data.doctor_token);
           await Promise.all([
             room.localParticipant.setCameraEnabled(true),
             room.localParticipant.setMicrophoneEnabled(true),
           ]);
         } catch (err) {
           if (!aborted) {
-            setError(err instanceof Error ? err.message : 'Failed to join session');
+            setError(err instanceof Error ? err.message : "Failed to join session");
             setSessionStarted(false);
           }
         } finally {
@@ -99,46 +101,13 @@ export default function Page() {
     };
   }, [sessionStarted, room, selected]);
 
-  const handleJoin = async (patient: PatientSummary) => {
+  const handleJoin = (patient: PatientSummary) => {
     setSelected(patient);
-    setError(null);
-    setJoining(true);
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-      // Get patient token + room
-      const patientRes = await fetch(`${baseUrl}/get-token?patient_id=${patient.patient_id}`, { method: 'POST' });
-      if (!patientRes.ok) throw new Error(`Failed to get patient token (status ${patientRes.status})`);
-      const patientData = await patientRes.json();
-
-      // Get doctor token for same room
-      const doctorRes = await fetch(
-        `${baseUrl}/get-doctor-token?patient_id=${patient.patient_id}&doctor_id=${doctorId}`,
-        { method: 'POST' }
-      );
-      if (!doctorRes.ok) throw new Error(`Failed to get doctor token (status ${doctorRes.status})`);
-      const doctorData = await doctorRes.json();
-
-      const frontendUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-      const patientLink = `${frontendUrl}?token=${encodeURIComponent(patientData.patient_token)}&roomId=${encodeURIComponent(patientData.room_id)}&patientId=${encodeURIComponent(patient.patient_id)}&likeKitUrl=${encodeURIComponent(patientData.livekit_url)}`;
-
-      setJoinInfo({
-        doctor_token: doctorData.doctor_token,
-        livekit_url: doctorData.livekit_url,
-        patient_link: patientLink,
-        room_id: doctorData.room_id,
-      });
-      setSessionStarted(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to join session');
-      setSessionStarted(false);
-    } finally {
-      setJoining(false);
-    }
+    setSessionStarted(true);
   };
 
   const formatDate = (value?: string) => {
-    if (!value) return '--';
+    if (!value) return "--";
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return value;
     return d.toLocaleString();
@@ -184,7 +153,7 @@ export default function Page() {
                     key={p.patient_id}
                     onClick={() => setSelected(p)}
                     className={`w-full rounded-xl border px-3 py-3 text-left transition hover:border-slate-600 hover:bg-slate-800 ${
-                      isSelected ? 'border-blue-500 bg-slate-800' : 'border-slate-800 bg-slate-900'
+                      isSelected ? "border-blue-500 bg-slate-800" : "border-slate-800 bg-slate-900"
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -193,7 +162,7 @@ export default function Page() {
                         <p className="text-xs text-slate-400">ID: {p.patient_id}</p>
                       </div>
                       <span className="text-xs rounded-full px-2 py-1 bg-slate-800 border border-slate-700">
-                        {p.urgency || 'NORMAL'}
+                        {p.urgency || "NORMAL"}
                       </span>
                     </div>
                     {p.condition && <p className="mt-1 text-sm text-slate-300">{p.condition}</p>}
@@ -205,7 +174,7 @@ export default function Page() {
               {!loadingList && patients.length === 0 && (
                 <div className="rounded-lg border border-slate-800 bg-slate-900/80 p-3 text-sm text-slate-300">
                   No patients yet. If this seems wrong, ensure the backend is running and that
-                  NEXT_PUBLIC_API_URL points to it (current: {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}).
+                  NEXT_PUBLIC_API_URL points to it (current: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}).
                 </div>
               )}
             </div>
@@ -222,8 +191,8 @@ export default function Page() {
                     <p className="text-sm text-slate-400">Selected Patient</p>
                     <h2 className="text-xl font-semibold text-white">{selected.name || selected.patient_id}</h2>
                     <p className="text-sm text-slate-300">ID: {selected.patient_id}</p>
-                    <p className="text-sm text-slate-300">Condition: {selected.condition || '--'}</p>
-                    <p className="text-sm text-slate-300">Urgency: {selected.urgency || 'NORMAL'}</p>
+                    <p className="text-sm text-slate-300">Condition: {selected.condition || "--"}</p>
+                    <p className="text-sm text-slate-300">Urgency: {selected.urgency || "NORMAL"}</p>
                     <p className="text-xs text-slate-500">Updated: {formatDate(selected.updated_at)}</p>
                   </div>
                   <div className="flex flex-col gap-2">
@@ -232,7 +201,7 @@ export default function Page() {
                       onClick={() => handleJoin(selected)}
                       className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-60"
                     >
-                      {joining ? 'Joining...' : 'Join Session'}
+                      {joining ? "Joining..." : "Join Session"}
                     </button>
                     <button
                       onClick={() => {
@@ -243,14 +212,6 @@ export default function Page() {
                     >
                       End Session
                     </button>
-                    {joinInfo?.patient_link && (
-                      <button
-                        onClick={() => navigator.clipboard.writeText(joinInfo.patient_link || '')}
-                        className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
-                      >
-                        Copy Patient Join Link
-                      </button>
-                    )}
                   </div>
                 </div>
 

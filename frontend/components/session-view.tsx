@@ -1,7 +1,7 @@
 'use client';
 
-import { useRoomContext, useVoiceAssistant } from '@livekit/components-react';
-import { RoomEvent } from 'livekit-client';
+import { ParticipantTile, useRoomContext, useTracks, useVoiceAssistant } from '@livekit/components-react';
+import { RoomEvent, Track } from 'livekit-client';
 import { useEffect, useState } from 'react';
 
 interface SessionViewProps {
@@ -13,6 +13,17 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
   const room = useRoomContext();
   const { state: agentState } = useVoiceAssistant();
   const [participants, setParticipants] = useState(0);
+  const [doctorJoined, setDoctorJoined] = useState(false);
+  const [doctorError, setDoctorError] = useState<string | null>(null);
+
+  // Subscribe to camera/screen tracks for all participants
+  const tracks = useTracks(
+    [
+      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.ScreenShare, withPlaceholder: true },
+    ],
+    { onlySubscribed: false }
+  ) || [];
 
   useEffect(() => {
     const handleParticipantsChange = () => {
@@ -28,6 +39,27 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
       room.off(RoomEvent.ParticipantsChanged, handleParticipantsChange);
     };
   }, [room]);
+
+  const inviteDoctor = async () => {
+    try {
+      setDoctorError(null);
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/get-doctor-token?patient_id=${patientId}&doctor_id=DOCTOR_001`,
+        { method: 'POST' }
+      );
+      if (!response.ok) throw new Error('Failed to get doctor token');
+
+      const data = await response.json();
+
+      setDoctorJoined(true);
+
+      // Copy invitation link for manual share
+      const inviteUrl = `${window.location.origin}?token=${data.doctor_token}&roomId=${data.room_id}&patientId=${patientId}&likeKitUrl=${data.livekit_url}`;
+      navigator.clipboard.writeText(inviteUrl).catch(() => {});
+    } catch (error) {
+      setDoctorError(error instanceof Error ? error.message : 'Failed to invite doctor');
+    }
+  };
 
   const getAgentStatus = () => {
     switch (agentState) {
@@ -68,40 +100,61 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8">
-        <div className="max-w-2xl w-full">
-          {/* Agent Status Card */}
-          <div className="rounded-2xl bg-slate-800/50 backdrop-blur border border-slate-700 p-8 mb-8">
-            <div className="flex items-center justify-center mb-6">
-              <div className="relative">
-                <div
-                  className={`h-20 w-20 rounded-full ${status.color} ${
-                    status.animate ? 'animate-pulse' : ''
-                  }`}
-                ></div>
-                <div className="absolute inset-0 rounded-full border-4 border-slate-600/30"></div>
+      <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-10">
+        <div className="w-full max-w-6xl">
+          <div className="grid gap-6 lg:grid-cols-3 items-start">
+            {/* Agent Status */}
+            <div className="rounded-2xl bg-slate-800/50 backdrop-blur border border-slate-700 p-8">
+              <div className="flex flex-col items-center">
+                <div className="relative mb-4">
+                  <div
+                    className={`h-20 w-20 rounded-full ${status.color} ${
+                      status.animate ? 'animate-pulse' : ''
+                    }`}
+                  ></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-slate-600/30"></div>
+                </div>
+                <div className="text-center space-y-1">
+                  <h2 className="text-xl font-semibold text-white">Medical AI Agent</h2>
+                  <p className="text-lg font-medium text-slate-300">{status.text}</p>
+                  <p className="text-sm text-slate-400">
+                    {participants} participant{participants !== 1 ? 's' : ''} in room
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="text-center">
-              <h2 className="text-xl font-semibold text-white">
-                Medical AI Agent
-              </h2>
-              <p className="mt-2 text-lg font-medium text-slate-300">
-                {status.text}
-              </p>
-              <p className="mt-1 text-sm text-slate-400">
-                {participants} participant{participants !== 1 ? 's' : ''} in room
-              </p>
+            {/* Video Grid */}
+            <div className="lg:col-span-2 rounded-2xl bg-slate-800/50 backdrop-blur border border-slate-700 p-4 md:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Live Video</p>
+                  <p className="text-sm text-slate-300">Camera and screen share tiles</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3 min-h-[280px] flex flex-wrap gap-3 justify-start">
+                {tracks && tracks.length > 0 ? (
+                  tracks.map((trackRef, idx) => {
+                    const key =
+                      trackRef.publication?.trackSid ??
+                      `${trackRef.participant?.sid || 'participant'}-${trackRef.source}-${idx}`;
+                    return (
+                      <div key={key} className="w-48 h-32 rounded-lg overflow-hidden bg-slate-800/80 border border-slate-700">
+                        <ParticipantTile trackRef={trackRef} />
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-slate-400 text-sm">Waiting for participants...</p>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Info Cards */}
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-lg bg-slate-800/30 border border-slate-700 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-400">
-                Status
-              </p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Status</p>
               <p className="mt-2 text-lg font-semibold text-white">
                 {agentState === 'speaking'
                   ? 'Agent Speaking'
@@ -114,20 +167,9 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
             </div>
 
             <div className="rounded-lg bg-slate-800/30 border border-slate-700 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-400">
-                Duration
-              </p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Duration</p>
               <p className="mt-2 text-lg font-semibold text-white">
                 {formatDuration(room.state === 'connected' ? Date.now() : 0)}
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-slate-800/30 border border-slate-700 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-400">
-                Connection
-              </p>
-              <p className="mt-2 text-lg font-semibold text-green-400">
-                Connected
               </p>
             </div>
           </div>
