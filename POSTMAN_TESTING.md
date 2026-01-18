@@ -3,7 +3,7 @@
 ## Base URL
 
 ```
-http://localhost:8000
+https://urchin-app-uibbb.ondigitalocean.app
 ```
 
 ---
@@ -13,7 +13,7 @@ http://localhost:8000
 Test if the server is running
 
 **Method:** `GET`  
-**Endpoint:** `http://localhost:8000/health`  
+**Endpoint:** `https://urchin-app-uibbb.ondigitalocean.app/health`  
 **Headers:** None  
 **Body:** None
 
@@ -32,7 +32,7 @@ Test if the server is running
 **This is the main endpoint to test!** Call this right after your triage agent completes assessment.
 
 **Method:** `POST`  
-**Endpoint:** `http://localhost:8000/triage/complete`  
+**Endpoint:** `https://urchin-app-uibbb.ondigitalocean.app/triage/complete`  
 **Headers:**
 
 ```
@@ -80,7 +80,7 @@ Content-Type: application/json
 Check if a patient has an active room
 
 **Method:** `GET`  
-**Endpoint:** `http://localhost:8000/patient/TEST0041/room-status`  
+**Endpoint:** `https://urchin-app-uibbb.ondigitalocean.app/patient/TEST0041/room-status`  
 **Headers:** None  
 **Body:** None
 
@@ -111,7 +111,7 @@ Check if a patient has an active room
 Generate a token for doctor to join the patient's room
 
 **Method:** `POST`  
-**Endpoint:** `http://localhost:8000/doctor/join-room`  
+**Endpoint:** `https://urchin-app-uibbb.ondigitalocean.app/doctor/join-room`  
 **Headers:**
 
 ```
@@ -155,7 +155,7 @@ Content-Type: application/json
 End the consultation and delete the room
 
 **Method:** `POST`  
-**Endpoint:** `http://localhost:8000/session/end/TEST0041`  
+**Endpoint:** `https://urchin-app-uibbb.ondigitalocean.app/session/end/TEST0041`  
 **Headers:** None  
 **Body:** None
 
@@ -183,7 +183,7 @@ End the consultation and delete the room
 Your existing endpoint for hardware data
 
 **Method:** `POST`  
-**Endpoint:** `http://localhost:8000/hardware/input`  
+**Endpoint:** `https://urchin-app-uibbb.ondigitalocean.app/hardware/input`  
 **Headers:**
 
 ```
@@ -212,7 +212,7 @@ Content-Type: application/json
 Your existing endpoint for session management
 
 **Method:** `POST`  
-**Endpoint:** `http://localhost:8000/session/control`  
+**Endpoint:** `https://urchin-app-uibbb.ondigitalocean.app/session/control`  
 **Headers:**
 
 ```
@@ -248,7 +248,7 @@ Content-Type: application/json
 #### Step 1: Complete Triage
 
 ```
-POST http://localhost:8000/triage/complete
+POST https://urchin-app-uibbb.ondigitalocean.app/triage/complete
 Body:
 {
   "patient_id": "TEST0041"
@@ -262,7 +262,7 @@ Body:
 #### Step 2: Check Room Status
 
 ```
-GET http://localhost:8000/patient/TEST0041/room-status
+GET https://urchin-app-uibbb.ondigitalocean.app/patient/TEST0041/room-status
 ```
 
 ✅ Verify status is "waiting_for_doctor"
@@ -272,7 +272,7 @@ GET http://localhost:8000/patient/TEST0041/room-status
 #### Step 3: Doctor Joins
 
 ```
-POST http://localhost:8000/doctor/join-room
+POST https://urchin-app-uibbb.ondigitalocean.app/doctor/join-room
 Body:
 {
   "patient_id": "TEST0041",
@@ -287,7 +287,7 @@ Body:
 #### Step 4: Check Room Status Again
 
 ```
-GET http://localhost:8000/patient/TEST0041/room-status
+GET https://urchin-app-uibbb.ondigitalocean.app/patient/TEST0041/room-status
 ```
 
 ✅ Verify status is now "doctor_joined"
@@ -298,7 +298,7 @@ GET http://localhost:8000/patient/TEST0041/room-status
 #### Step 5: End Session
 
 ```
-POST http://localhost:8000/session/end/TEST0041
+POST https://urchin-app-uibbb.ondigitalocean.app/session/end/TEST0041
 ```
 
 ✅ Room should be deleted
@@ -308,7 +308,7 @@ POST http://localhost:8000/session/end/TEST0041
 #### Step 6: Check Room Status One Last Time
 
 ```
-GET http://localhost:8000/patient/TEST0041/room-status
+GET https://urchin-app-uibbb.ondigitalocean.app/patient/TEST0041/room-status
 ```
 
 ✅ Status should show "completed"
@@ -365,7 +365,7 @@ The system will:
 Set these in Postman Collection Variables:
 
 ```
-base_url: http://localhost:8000
+base_url: https://urchin-app-uibbb.ondigitalocean.app
 patient_id: TEST0041
 doctor_id: DR456
 ```

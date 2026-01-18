@@ -44,7 +44,7 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
     try {
       setDoctorError(null);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/get-doctor-token?patient_id=${patientId}&doctor_id=DOCTOR_001`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://urchin-app-uibbb.ondigitalocean.app'}/get-doctor-token?patient_id=${patientId}&doctor_id=DOCTOR_001`,
         { method: 'POST' }
       );
       if (!response.ok) throw new Error('Failed to get doctor token');
@@ -122,8 +122,8 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
                   onClick={inviteDoctor}
                   disabled={doctorJoined}
                   className={`mt-6 w-full rounded-lg px-4 py-2 font-semibold text-white transition-colors ${doctorJoined
-                      ? 'bg-green-600 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
+                    ? 'bg-green-600 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700'
                     }`}
                 >
                   {doctorJoined ? '✓ Link Copied' : 'Invite Doctor'}

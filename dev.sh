@@ -72,7 +72,7 @@ case "${1:-help}" in
             print_success "Frontend starting in tmux window 'frontend'"
             
             echo -e "\n${GREEN}Both services are running!${NC}"
-            echo "Backend:  http://localhost:8000"
+            echo "Backend:  https://urchin-app-uibbb.ondigitalocean.app"
             echo "Frontend: http://localhost:3000"
             echo -e "\n${YELLOW}tmux commands:${NC}"
             echo "  tmux attach -t nexhacks    # Attach to session"
@@ -115,7 +115,7 @@ case "${1:-help}" in
             exit 1
         fi
         
-        BACKEND="http://localhost:8000"
+        BACKEND="https://urchin-app-uibbb.ondigitalocean.app"
         PATIENT="TEST00412"
         
         print_info "Testing backend health..."
@@ -198,7 +198,7 @@ case "${1:-help}" in
         [ -f "frontend/package.json" ] && print_success "frontend/package.json exists" || print_error "frontend/package.json missing"
         
         echo -e "\n${YELLOW}Backend Health:${NC}"
-        if curl -s http://localhost:8000/health > /dev/null 2>&1 || curl -s http://localhost:8000/ > /dev/null 2>&1; then
+        if curl -s https://urchin-app-uibbb.ondigitalocean.app/health > /dev/null 2>&1 || curl -s https://urchin-app-uibbb.ondigitalocean.app/ > /dev/null 2>&1; then
             print_success "Backend is running"
         else
             print_error "Backend is not running"

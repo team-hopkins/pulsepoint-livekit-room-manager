@@ -44,7 +44,7 @@ export default function DoctorDashboard() {
       setLoadingList(true);
       setError(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app";
         const res = await fetch(`${baseUrl}/patients`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -147,7 +147,7 @@ export default function DoctorDashboard() {
     setSelected(patient);
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app";
       const payload = {
         patient_id: patient.patient_id,
         doctor_id: doctorId,
@@ -195,7 +195,7 @@ export default function DoctorDashboard() {
         // Legacy format - connect directly
         console.log("📡 Using legacy connection format");
         await room.connect(data.livekit_url, data.doctor_token);
-        
+
         // Enable microphone automatically
         try {
           await room.localParticipant.setMicrophoneEnabled(true);
@@ -203,7 +203,7 @@ export default function DoctorDashboard() {
         } catch (micError) {
           console.warn("⚠️ Could not enable microphone:", micError);
         }
-        
+
         setSessionStarted(true);
       } else {
         throw new Error("Invalid response format from server");
@@ -566,8 +566,8 @@ function VideoSection({ room }: { room: Room }) {
           <button
             onClick={toggleMicrophone}
             className={`p-3 rounded-full transition-all duration-200 ${isMicrophoneEnabled
-                ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                : "bg-red-500 text-white hover:bg-red-600"
+              ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+              : "bg-red-500 text-white hover:bg-red-600"
               }`}
             title={isMicrophoneEnabled ? "Mute microphone" : "Unmute microphone"}
           >
@@ -586,8 +586,8 @@ function VideoSection({ room }: { room: Room }) {
           <button
             onClick={toggleCamera}
             className={`p-3 rounded-full transition-all duration-200 ${isCameraEnabled
-                ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                : "bg-red-500 text-white hover:bg-red-600"
+              ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+              : "bg-red-500 text-white hover:bg-red-600"
               }`}
             title={isCameraEnabled ? "Turn off camera" : "Turn on camera"}
           >
