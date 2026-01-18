@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # LiveKit Configuration
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      
+      # MongoDB Configuration
+      - MONGODB_URL=${MONGODB_URL}
+      - DATABASE_NAME=${DATABASE_NAME:-carepoint_medical}
+      - COLLECTION_NAME=${COLLECTION_NAME:-consultations}
+      
+      # Twilio (optional)
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      
+      # Sinch (optional)
+      - SINCH_KEY_ID=${SINCH_KEY_ID}
+      - SINCH_KEY_SECRET=${SINCH_KEY_SECRET}
+      - SINCH_PROJECT_ID=${SINCH_PROJECT_ID}
+      
+      # Emergency Contact (optional)
+      - EMERGENCY_PHONE_NUMBERS=${EMERGENCY_PHONE_NUMBERS}
+      
+      # Port
+      - PORT=8080
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
