@@ -260,6 +260,40 @@ async def shutdown_event():
     mongodb_client.close()
     print("🔌 MongoDB connection closed")
 
+@app.post("/get-token")
+async def get_token(patient_id: str = "HACKATHON_USER"):
+    """
+    Quick token generation for hackathon - skips triage entirely.
+    Usage: POST /get-token?patient_id=your_patient_id
+    """
+    try:
+        room_id = f"hackathon_{patient_id}"
+        
+        # Create access token for patient
+        patient_token = api.AccessToken(
+            os.getenv("LIVEKIT_API_KEY"),
+            os.getenv("LIVEKIT_API_SECRET")
+        )
+        patient_token.with_identity(f"patient_{patient_id}")
+        patient_token.with_name(f"Patient {patient_id}")
+        patient_token.with_grants(api.VideoGrants(
+            room_join=True,
+            room=room_id,
+            can_publish=True,
+            can_publish_data=True,
+            can_subscribe=True
+        ))
+        
+        return {
+            "status": "success",
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "patient_token": patient_token.to_jwt(),
+            "livekit_url": os.getenv("LIVEKIT_URL"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/hardware/input")
 async def receive_hardware_input(payload: HardwarePayload):
     return {
@@ -595,3 +629,59 @@ async def send_emergency_alert(alert: EmergencyAlert):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/get-patient-meeting-url")
+async def get_patient_meeting_url(triage_result: TriageResult):
+    """
+    Generate a frontend URL for the patient to join the consultation.
+    This endpoint returns a URL that can be sent to the patient.
+    """
+    try:
+        # Fetch patient data from MongoDB
+        patient = await patients_collection.find_one({"patient_id": triage_result.patient_id})
+        
+        if not patient:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Patient {triage_result.patient_id} not found in database"
+            )
+        
+        # Check if the patient has a LiveKit room
+        livekit_room = patient.get("livekit_room", {})
+        if not livekit_room or not livekit_room.get("room_id"):
+            raise HTTPException(
+                status_code=400, 
+                detail="No LiveKit room found for this patient. Complete triage first."
+            )
+        
+        # Get the frontend URL from environment (default to localhost for development)
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        
+        # Build query parameters
+        params = {
+            "token": livekit_room.get("patient_token"),
+            "roomId": livekit_room.get("room_id"),
+            "patientId": triage_result.patient_id,
+            "likeKitUrl": livekit_room.get("livekit_url")
+        }
+        
+        # Generate the full meeting URL
+        query_string = urllib.parse.urlencode(params)
+        meeting_url = f"{frontend_url}?{query_string}"
+        
+        # Get urgency from triage data
+        urgency = patient.get("output", {}).get("urgency", "NORMAL")
+        
+        return {
+            "status": "success",
+            "message": "Patient meeting URL generated",
+            "patient_id": triage_result.patient_id,
+            "meeting_url": meeting_url,
+            "urgency": urgency,
+            "room_id": livekit_room.get("room_id")
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate meeting URL: {str(e)}")
