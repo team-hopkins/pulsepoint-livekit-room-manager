@@ -7,6 +7,7 @@ import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
 from typing import Optional
+from sinch import SinchClient
 
 # Load environment variables from .env file
 load_dotenv(".env")
@@ -22,6 +23,12 @@ COLLECTION_NAME = os.getenv("COLLECTION_NAME", "consultations")
 mongodb_client = AsyncIOMotorClient(MONGODB_URL)
 db = mongodb_client[DATABASE_NAME]
 patients_collection = db[COLLECTION_NAME]
+
+sinch_client = SinchClient(
+    key_id=os.getenv("SINCH_KEY_ID"),
+    key_secret=os.getenv("SINCH_KEY_SECRET"),
+    project_id=os.getenv("SINCH_PROJECT_ID")
+)
 
 class HardwarePayload(BaseModel):
     patient_id: str
@@ -40,6 +47,12 @@ class TriageResult(BaseModel):
 class DoctorJoinRequest(BaseModel):
     patient_id: str
     doctor_id: str
+
+class EmergencyAlert(BaseModel):
+    patient_id: str
+    emergency_type: str
+    location: Optional[str] = None
+    contact_number: str
 
 class LiveKitManager:
     def __init__(self):
@@ -470,3 +483,21 @@ async def end_patient_session(patient_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to end session: {str(e)}")
+
+@app.post("/emergency/alert")
+async def send_emergency_alert(alert: EmergencyAlert):
+    """Send emergency SMS alert."""
+    try:
+        message = f"🚨 EMERGENCY: {alert.emergency_type}\nPatient ID: {alert.patient_id}\nLocation: {alert.location or 'Unknown'}\nRespond immediately!"
+        
+        response = sinch_client.sms.batches.send(
+            body=message,
+            to=[alert.contact_number],
+            from_="+12085813509",
+            delivery_report="none"
+        )
+        
+        return {"status": "success", "batch_id": response.id}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
