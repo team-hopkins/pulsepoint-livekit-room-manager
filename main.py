@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from livekit import api
 from dotenv import load_dotenv
@@ -16,10 +17,20 @@ load_dotenv(".env")
 
 app = FastAPI()
 
+# CORS for local frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # MongoDB Configuration
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb+srv://pulsepoint:pulsepoint@cluster0.d7dh4ba.mongodb.net")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "carepoint_medical")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "consultations")
+SKIP_MONGO = os.getenv("SKIP_MONGO", "0") == "1"
 
 # MongoDB Client with timeout settings
 mongodb_client = AsyncIOMotorClient(
@@ -240,6 +251,10 @@ livekit_manager = LiveKitManager()
 @app.on_event("startup")
 async def startup_event():
     """Test MongoDB connection on startup"""
+    if SKIP_MONGO:
+        print("⚠️  SKIP_MONGO=1 set; skipping MongoDB connection")
+        return
+
     try:
         # Ping the database to check connection
         await mongodb_client.admin.command('ping')
@@ -259,6 +274,129 @@ async def shutdown_event():
     """Close MongoDB connection on shutdown"""
     mongodb_client.close()
     print("🔌 MongoDB connection closed")
+
+@app.post("/get-token")
+async def get_token(patient_id: str = "HACKATHON_USER"):
+    """
+    Quick token generation for hackathon - skips triage entirely.
+    Usage: POST /get-token?patient_id=your_patient_id
+    """
+    try:
+        room_id = f"hackathon_{patient_id}"
+        
+        # Create access token for patient
+        patient_token = api.AccessToken(
+            os.getenv("LIVEKIT_API_KEY"),
+            os.getenv("LIVEKIT_API_SECRET")
+        )
+        patient_token.with_identity(f"patient_{patient_id}")
+        patient_token.with_name(f"Patient {patient_id}")
+        patient_token.with_grants(api.VideoGrants(
+            room_join=True,
+            room=room_id,
+            can_publish=True,
+            can_publish_data=True,
+            can_subscribe=True
+        ))
+        
+        return {
+            "status": "success",
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "patient_token": patient_token.to_jwt(),
+            "livekit_url": os.getenv("LIVEKIT_URL"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/get-doctor-token")
+async def get_doctor_token(patient_id: str = "HACKATHON_USER", doctor_id: str = "DOCTOR_001"):
+    """Generate a doctor token for a simple hack/demo room (does not require Mongo)."""
+    try:
+        room_id = f"hackathon_{patient_id}"
+
+        doctor_token = api.AccessToken(
+            os.getenv("LIVEKIT_API_KEY"),
+            os.getenv("LIVEKIT_API_SECRET")
+        )
+        doctor_token.with_identity(f"doctor_{doctor_id}")
+        doctor_token.with_name(f"Doctor {doctor_id}")
+        doctor_token.with_grants(api.VideoGrants(
+            room_join=True,
+            room=room_id,
+            can_publish=True,
+            can_publish_data=True,
+            can_subscribe=True
+        ))
+
+        return {
+            "status": "success",
+            "doctor_id": doctor_id,
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "doctor_token": doctor_token.to_jwt(),
+            "livekit_url": os.getenv("LIVEKIT_URL"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/patient/{patient_id}")
+async def get_patient(patient_id: str):
+    """Fetch a single patient record from MongoDB only."""
+    try:
+        if SKIP_MONGO:
+            raise HTTPException(status_code=503, detail="MongoDB disabled (SKIP_MONGO=1)")
+
+        patient = await patients_collection.find_one({"patient_id": patient_id})
+        if patient:
+            if "_id" in patient:
+                patient["_id"] = str(patient["_id"])
+            return {
+                "status": "success",
+                "source": "mongodb",
+                "patient": patient
+            }
+        raise HTTPException(status_code=404, detail="Patient not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch patient: {str(e)}")
+
+
+@app.get("/patients")
+async def list_patients(limit: int = 25):
+    """List patients for the doctor dashboard from MongoDB only."""
+    try:
+        if SKIP_MONGO:
+            raise HTTPException(status_code=503, detail="MongoDB disabled (SKIP_MONGO=1)")
+
+        cursor = patients_collection.find(
+            {},
+            {
+                "patient_id": 1,
+                "name": 1,
+                "condition": 1,
+                "urgency": 1,
+                "output.urgency": 1,
+                "updated_at": 1,
+                "_id": 0,
+            },
+        ).limit(limit)
+        patients = await cursor.to_list(length=limit)
+
+        for p in patients:
+            derived_urgency = p.get("urgency") or p.get("output", {}).get("urgency")
+            if derived_urgency:
+                p["urgency"] = derived_urgency
+            elif "urgency" not in p:
+                p["urgency"] = "NORMAL"
+        return {
+            "status": "success",
+            "source": "mongodb",
+            "patients": patients
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list patients: {str(e)}")
 
 @app.post("/hardware/input")
 async def receive_hardware_input(payload: HardwarePayload):
@@ -479,6 +617,53 @@ async def doctor_join_room(request: DoctorJoinRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to add doctor to room: {str(e)}")
 
+@app.post("/doctor/{doctor_id}/join-patient/{patient_id}")
+async def doctor_join_patient_room(doctor_id: str, patient_id: str):
+    try:
+        # Deterministic room name
+        room_id = f"hackathon_{patient_id}"
+
+        # Optional MongoDB update (non-blocking)
+        try:
+            await patients_collection.update_one(
+                {"patient_id": patient_id},
+                {
+                    "$set": {
+                        "livekit_room.room_id": room_id,
+                        "livekit_room.status": "doctor_joined",
+                        "livekit_room.doctor_id": doctor_id,
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }
+                },
+                upsert=True,
+            )
+        except Exception:
+            pass  # MongoDB must not block hackathon flow
+
+        # Generate doctor token
+        doctor_token = api.AccessToken(
+            os.getenv("LIVEKIT_API_KEY"),
+            os.getenv("LIVEKIT_API_SECRET"),
+        )
+        doctor_token.with_identity(f"doctor_{doctor_id}")
+        doctor_token.with_name(f"Doctor {doctor_id}")
+        doctor_token.with_grants(api.VideoGrants(
+            room_join=True,
+            room=room_id,
+            can_publish=True,
+            can_subscribe=True,
+        ))
+
+        return {
+            "status": "success",
+            "room_id": room_id,
+            "doctor_token": doctor_token.to_jwt(),
+            "livekit_url": os.getenv("LIVEKIT_URL"),
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # New endpoint: Get patient room status
 @app.get("/patient/{patient_id}/room-status")
 async def get_room_status(patient_id: str):
@@ -580,3 +765,59 @@ async def send_emergency_alert(alert: EmergencyAlert):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/get-patient-meeting-url")
+async def get_patient_meeting_url(triage_result: TriageResult):
+    """
+    Generate a frontend URL for the patient to join the consultation.
+    This endpoint returns a URL that can be sent to the patient.
+    """
+    try:
+        # Fetch patient data from MongoDB
+        patient = await patients_collection.find_one({"patient_id": triage_result.patient_id})
+        
+        if not patient:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Patient {triage_result.patient_id} not found in database"
+            )
+        
+        # Check if the patient has a LiveKit room
+        livekit_room = patient.get("livekit_room", {})
+        if not livekit_room or not livekit_room.get("room_id"):
+            raise HTTPException(
+                status_code=400, 
+                detail="No LiveKit room found for this patient. Complete triage first."
+            )
+        
+        # Get the frontend URL from environment (default to localhost for development)
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        
+        # Build query parameters
+        params = {
+            "token": livekit_room.get("patient_token"),
+            "roomId": livekit_room.get("room_id"),
+            "patientId": triage_result.patient_id,
+            "likeKitUrl": livekit_room.get("livekit_url")
+        }
+        
+        # Generate the full meeting URL
+        query_string = urllib.parse.urlencode(params)
+        meeting_url = f"{frontend_url}?{query_string}"
+        
+        # Get urgency from triage data
+        urgency = patient.get("output", {}).get("urgency", "NORMAL")
+        
+        return {
+            "status": "success",
+            "message": "Patient meeting URL generated",
+            "patient_id": triage_result.patient_id,
+            "meeting_url": meeting_url,
+            "urgency": urgency,
+            "room_id": livekit_room.get("room_id")
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate meeting URL: {str(e)}")
