@@ -453,13 +453,6 @@ async def doctor_join_room(request: DoctorJoinRequest):
         doctor_meet_url = create_meet_url(doctor_data["livekit_url"], doctor_data["doctor_token"])
         
         return {
-            "status": "success",
-            "message": "Doctor token generated",
-            "patient_id": request.patient_id,
-            "doctor_id": request.doctor_id,
-            "room_id": room_id,
-            "doctor_token": doctor_data["doctor_token"],
-            "livekit_url": doctor_data["livekit_url"],
             "doctor_meet_url": doctor_meet_url
         }
     
