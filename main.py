@@ -5,9 +5,11 @@ from dotenv import load_dotenv
 import os
 import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import ServerSelectionTimeoutError, NetworkTimeout, ConnectionFailure
 from datetime import datetime
 from typing import Optional
 from sinch import SinchClient
+import urllib.parse
 
 # Load environment variables from .env file
 load_dotenv(".env")
@@ -19,8 +21,17 @@ MONGODB_URL = os.getenv("MONGODB_URL", "mongodb+srv://pulsepoint:pulsepoint@clus
 DATABASE_NAME = os.getenv("DATABASE_NAME", "carepoint_medical")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "consultations")
 
-# MongoDB Client
-mongodb_client = AsyncIOMotorClient(MONGODB_URL)
+# MongoDB Client with timeout settings
+mongodb_client = AsyncIOMotorClient(
+    MONGODB_URL,
+    serverSelectionTimeoutMS=50000,  # 5 seconds timeout for server selection
+    connectTimeoutMS=10000,         # 10 seconds timeout for initial connection
+    socketTimeoutMS=10000,          # 10 seconds timeout for socket operations
+    maxPoolSize=10,                 # Maximum connection pool size
+    minPoolSize=1,                  # Minimum connection pool size
+    retryWrites=True,               # Automatically retry write operations
+    retryReads=True                 # Automatically retry read operations
+)
 db = mongodb_client[DATABASE_NAME]
 patients_collection = db[COLLECTION_NAME]
 
@@ -53,6 +64,18 @@ class EmergencyAlert(BaseModel):
     emergency_type: str
     location: Optional[str] = None
     contact_number: str
+
+def create_meet_url(livekit_url: str, token: str) -> str:
+    """
+    Generate a LiveKit Meet URL with encoded parameters.
+    This creates a direct clickable link that users can access without any setup.
+    """
+    base_url = "https://meet.livekit.io/custom/"
+    params = {
+        "liveKitUrl": livekit_url,
+        "token": token
+    }
+    return f"{base_url}?{urllib.parse.urlencode(params)}"
 
 class LiveKitManager:
     def __init__(self):
@@ -214,6 +237,29 @@ class LiveKitManager:
 
 livekit_manager = LiveKitManager()
 
+@app.on_event("startup")
+async def startup_event():
+    """Test MongoDB connection on startup"""
+    try:
+        # Ping the database to check connection
+        await mongodb_client.admin.command('ping')
+        print("✅ MongoDB connection successful!")
+        print(f"📊 Database: {DATABASE_NAME}")
+        print(f"📁 Collection: {COLLECTION_NAME}")
+        
+        # Get count to verify access
+        count = await patients_collection.count_documents({})
+        print(f"👥 Total documents in collection: {count}")
+    except Exception as e:
+        print(f"❌ MongoDB connection failed: {str(e)}")
+        print("⚠️  Server will continue but database operations may fail")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close MongoDB connection on shutdown"""
+    mongodb_client.close()
+    print("🔌 MongoDB connection closed")
+
 @app.post("/hardware/input")
 async def receive_hardware_input(payload: HardwarePayload):
     return {
@@ -336,6 +382,9 @@ async def complete_triage(triage_result: TriageResult):
             }
         )
         
+        # Generate LiveKit Meet URLs for direct access
+        patient_meet_url = create_meet_url(room_data["livekit_url"], room_data["patient_token"])
+        
         return {
             "status": "success",
             "message": "Triage complete, LiveKit room created",
@@ -343,10 +392,33 @@ async def complete_triage(triage_result: TriageResult):
             "room_id": room_data["room_id"],
             "patient_token": room_data["patient_token"],
             "livekit_url": room_data["livekit_url"],
+            "patient_meet_url": patient_meet_url,
             "urgency": triage_urgency,
             "mongodb_updated": update_result.modified_count > 0
         }
     
+    except ServerSelectionTimeoutError as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "MongoDB connection timeout",
+                "message": "Unable to connect to MongoDB. The database may be unreachable.",
+                "suggestion": "Check your MongoDB Atlas connection string and network connectivity",
+                "technical_details": str(e)
+            }
+        )
+    except NetworkTimeout as e:
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "error": "MongoDB network timeout",
+                "message": "MongoDB operation timed out",
+                "suggestion": "The database is slow or overloaded. Try again in a moment.",
+                "technical_details": str(e)
+            }
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to complete triage: {str(e)}")
 
@@ -385,6 +457,9 @@ async def doctor_join_room(request: DoctorJoinRequest):
             }
         )
         
+        # Generate LiveKit Meet URL for doctor
+        doctor_meet_url = create_meet_url(doctor_data["livekit_url"], doctor_data["doctor_token"])
+        
         return {
             "status": "success",
             "message": "Doctor token generated",
@@ -392,9 +467,28 @@ async def doctor_join_room(request: DoctorJoinRequest):
             "doctor_id": request.doctor_id,
             "room_id": room_id,
             "doctor_token": doctor_data["doctor_token"],
-            "livekit_url": doctor_data["livekit_url"]
+            "livekit_url": doctor_data["livekit_url"],
+            "doctor_meet_url": doctor_meet_url
         }
     
+    except ServerSelectionTimeoutError as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "MongoDB connection timeout",
+                "message": "Unable to connect to MongoDB",
+                "technical_details": str(e)
+            }
+        )
+    except NetworkTimeout as e:
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "error": "MongoDB network timeout",
+                "message": "MongoDB operation timed out",
+                "technical_details": str(e)
+            }
+        )
     except HTTPException:
         raise
     except Exception as e:
