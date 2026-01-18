@@ -65,7 +65,7 @@ export default function PatientPage({ params }: { params: Promise<{ patientId: s
       setLoading(true);
       setError(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app";
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const res = await fetch(`${baseUrl}/patient/${patientId}`, { cache: "no-store" });
         if (!res.ok) throw new Error(`Failed to load patient (status ${res.status})`);
         const data = await res.json();
@@ -125,7 +125,7 @@ export default function PatientPage({ params }: { params: Promise<{ patientId: s
     setError(null);
     setJoining(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app";
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
       const patientRes = await fetch(`${baseUrl}/get-token?patient_id=${patient.patient_id}`, { method: "POST" });
       if (!patientRes.ok) throw new Error(`Failed to get patient token (status ${patientRes.status})`);
