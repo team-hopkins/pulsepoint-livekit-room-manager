@@ -20,6 +20,7 @@ interface PatientSummary {
   urgency?: string;
   updated_at?: string;
   location?: string;
+  processing_time?: number;
   output?: {
     response?: string;
     urgency?: string;
@@ -60,6 +61,34 @@ export default function DoctorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<string>("");
   const [recentTranscription, setRecentTranscription] = useState<string>("");
+
+  // Calculate real-time stats
+  const stats = useMemo(() => {
+    const total = patients.length;
+    const critical = patients.filter(p => 
+      p.output?.urgency === "HIGH" || p.output?.urgency === "CRITICAL"
+    ).length;
+    const medium = patients.filter(p => 
+      p.output?.urgency === "MEDIUM" || p.output?.urgency === "MODERATE"
+    ).length;
+    const low = patients.filter(p => 
+      p.output?.urgency === "LOW"
+    ).length;
+    const avgConfidence = patients.length > 0
+      ? (patients.reduce((sum, p) => sum + (p.output?.confidence || 0), 0) / patients.length * 100).toFixed(0)
+      : 0;
+    const withImages = patients.filter(p => p.input?.has_image).length;
+    
+    // Calculate average response time from processing_time field
+    const avgResponseTime = patients.length > 0
+      ? (patients.reduce((sum, p) => {
+          const processingTime = typeof p.processing_time === 'number' ? p.processing_time : 0;
+          return sum + processingTime;
+        }, 0) / patients.length).toFixed(1)
+      : "0.0";
+
+    return { total, critical, medium, low, avgConfidence, withImages, avgResponseTime };
+  }, [patients]);
 
   // Fetch patient list
   useEffect(() => {
@@ -355,6 +384,156 @@ export default function DoctorDashboard() {
               </div>
             </div>
           </motion.header>
+
+          {/* Real-time Stats Dashboard */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"
+          >
+            {/* Total Patients */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.total}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Total Patients</p>
+                </div>
+              </div>
+              <div className="h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full" style={{ width: '100%' }}></div>
+              </div>
+            </div>
+
+            {/* Critical Cases */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.critical}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Critical</p>
+                </div>
+              </div>
+              <div className="h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-red-500 rounded-full animate-pulse" style={{ width: `${stats.total > 0 ? (stats.critical / stats.total * 100) : 0}%` }}></div>
+              </div>
+            </div>
+
+            {/* AI Confidence */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.avgConfidence}%</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Avg. Confidence</p>
+                </div>
+              </div>
+              <div className="h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${stats.avgConfidence}%` }}></div>
+              </div>
+            </div>
+
+            {/* Average Response Time */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.avgResponseTime}s</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Avg Response</p>
+                </div>
+              </div>
+              <div className="h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min((30 - parseFloat(String(stats.avgResponseTime))) / 30 * 100, 100)}%` }}></div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Urgency Distribution Bar */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 mb-8"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Urgency Distribution</h3>
+              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                <span>Live Data</span>
+              </div>
+            </div>
+            
+            {stats.total > 0 ? (
+              <>
+                <div className="flex h-8 rounded-lg overflow-hidden mb-4 shadow-inner">
+                  {stats.critical > 0 && (
+                    <div 
+                      className="bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center text-white text-xs font-bold transition-all duration-500"
+                      style={{ width: `${(stats.critical / stats.total * 100)}%` }}
+                    >
+                      {stats.critical > 0 && `${stats.critical}`}
+                    </div>
+                  )}
+                  {stats.medium > 0 && (
+                    <div 
+                      className="bg-gradient-to-r from-yellow-500 to-yellow-600 flex items-center justify-center text-white text-xs font-bold transition-all duration-500"
+                      style={{ width: `${(stats.medium / stats.total * 100)}%` }}
+                    >
+                      {stats.medium > 0 && `${stats.medium}`}
+                    </div>
+                  )}
+                  {stats.low > 0 && (
+                    <div 
+                      className="bg-gradient-to-r from-green-500 to-green-600 flex items-center justify-center text-white text-xs font-bold transition-all duration-500"
+                      style={{ width: `${(stats.low / stats.total * 100)}%` }}
+                    >
+                      {stats.low > 0 && `${stats.low}`}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-red-500"></div>
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      Critical: <span className="font-bold text-slate-900 dark:text-white">{stats.critical}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-yellow-500"></div>
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      Medium: <span className="font-bold text-slate-900 dark:text-white">{stats.medium}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-green-500"></div>
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      Low: <span className="font-bold text-slate-900 dark:text-white">{stats.low}</span>
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-center text-slate-500 dark:text-slate-400 py-4">No patient data available</p>
+            )}
+          </motion.div>
 
           {/* Error Alert */}
           <AnimatePresence>
