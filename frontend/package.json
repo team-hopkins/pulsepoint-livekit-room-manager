@@ -10,10 +10,14 @@
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.9",
+    "@phosphor-icons/react": "^2.1.10",
+    "framer-motion": "^12.26.2",
     "livekit-client": "^2.13.3",
     "next": "15.4.6",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",

@@ -44,7 +44,7 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
     try {
       setDoctorError(null);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'https://urchin-app-uibbb.ondigitalocean.app'}/get-doctor-token?patient_id=${patientId}&doctor_id=DOCTOR_001`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/get-doctor-token?patient_id=${patientId}&doctor_id=DOCTOR_001`,
         { method: 'POST' }
       );
       if (!response.ok) throw new Error('Failed to get doctor token');
@@ -53,7 +53,7 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
 
       const inviteUrl = `${window.location.origin}?token=${data.doctor_token}&roomId=${data.room_id}&patientId=${patientId}&likeKitUrl=${data.livekit_url}`;
       setInviteLink(inviteUrl);
-      
+
       await navigator.clipboard.writeText(inviteUrl);
       setDoctorJoined(true);
     } catch (error) {
@@ -105,9 +105,8 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
               <div className="flex flex-col items-center">
                 <div className="relative mb-4">
                   <div
-                    className={`h-20 w-20 rounded-full ${status.color} ${
-                      status.animate ? 'animate-pulse' : ''
-                    }`}
+                    className={`h-20 w-20 rounded-full ${status.color} ${status.animate ? 'animate-pulse' : ''
+                      }`}
                   ></div>
                   <div className="absolute inset-0 rounded-full border-4 border-slate-600/30"></div>
                 </div>
@@ -122,11 +121,10 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
                 <button
                   onClick={inviteDoctor}
                   disabled={doctorJoined}
-                  className={`mt-6 w-full rounded-lg px-4 py-2 font-semibold text-white transition-colors ${
-                    doctorJoined
+                  className={`mt-6 w-full rounded-lg px-4 py-2 font-semibold text-white transition-colors ${doctorJoined
                       ? 'bg-green-600 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
+                    }`}
                 >
                   {doctorJoined ? '✓ Link Copied' : 'Invite Doctor'}
                 </button>

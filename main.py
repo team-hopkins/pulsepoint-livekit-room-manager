@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional
 from sinch import SinchClient
 import urllib.parse
+from agent_dispatcher import agent_dispatcher
 
 # Load environment variables from .env file
 load_dotenv(".env")
@@ -587,7 +588,8 @@ async def doctor_join_room(request: DoctorJoinRequest):
             }
         )
         
-        # Generate LiveKit Meet URL for doctor
+        await agent_dispatcher.spawn_agent_for_room(room_id)
+        
         doctor_meet_url = create_meet_url(doctor_data["livekit_url"], doctor_data["doctor_token"])
         
         return {
