@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-
+/frontend
 # Virtual environments
 .venv/
 venv/

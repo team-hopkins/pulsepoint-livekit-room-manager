@@ -30,7 +30,7 @@ export default function DoctorDashboard() {
       setLoadingList(true);
       setError(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app";
         const res = await fetch(`${baseUrl}/patients`, {
           method: "GET",
           headers: {
@@ -71,7 +71,7 @@ export default function DoctorDashboard() {
         setJoining(true);
         setError(null);
         try {
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app";
           const res = await fetch(
             `${baseUrl}/get-doctor-token?patient_id=${selected.patient_id}&doctor_id=${doctorId}`,
             { method: "POST" }
@@ -174,7 +174,7 @@ export default function DoctorDashboard() {
               {!loadingList && patients.length === 0 && (
                 <div className="rounded-lg border border-slate-800 bg-slate-900/80 p-3 text-sm text-slate-300">
                   No patients yet. If this seems wrong, ensure the backend is running and that
-                  NEXT_PUBLIC_API_URL points to it (current: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}).
+                  NEXT_PUBLIC_API_URL points to it (current: {process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app"}).
                 </div>
               )}
             </div>

@@ -22,7 +22,7 @@ export default function Page() {
       setLoadingList(true);
       setError(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://urchin-app-uibbb.ondigitalocean.app';
         const res = await fetch(`${baseUrl}/patients`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
