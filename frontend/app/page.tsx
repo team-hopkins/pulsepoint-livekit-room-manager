@@ -67,7 +67,7 @@ export default function DoctorDashboard() {
       setLoadingList(true);
       setError(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app";
         const res = await fetch(`${baseUrl}/patients`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -98,7 +98,7 @@ export default function DoctorDashboard() {
 
       setLoadingDetails(true);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app";
         const response = await fetch(`${baseUrl}/patient/${selected.patient_id}`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
