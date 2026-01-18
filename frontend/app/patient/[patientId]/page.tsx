@@ -40,11 +40,12 @@ interface JoinInfo {
   room_id: string;
 }
 
-export default function PatientPage({ params }: { params: { patientId: string } }) {
+export default function PatientPage({ params }: { params: Promise<{ patientId: string }> }) {
   const router = useRouter();
   const room = useMemo(() => new Room(), []);
   const doctorId = "DOCTOR_001";
 
+  const [patientId, setPatientId] = useState<string>("");
   const [patient, setPatient] = useState<PatientRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,13 +53,20 @@ export default function PatientPage({ params }: { params: { patientId: string } 
   const [sessionStarted, setSessionStarted] = useState(false);
   const [joinInfo, setJoinInfo] = useState<JoinInfo | null>(null);
 
+  // Unwrap params promise
   useEffect(() => {
+    params.then(({ patientId }) => setPatientId(patientId));
+  }, [params]);
+
+  useEffect(() => {
+    if (!patientId) return;
+    
     const fetchPatient = async () => {
       setLoading(true);
       setError(null);
       try {
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://urchin-app-uibbb.ondigitalocean.app";
-        const res = await fetch(`${baseUrl}/patient/${params.patientId}`, { cache: "no-store" });
+        const res = await fetch(`${baseUrl}/patient/${patientId}`, { cache: "no-store" });
         if (!res.ok) throw new Error(`Failed to load patient (status ${res.status})`);
         const data = await res.json();
         setPatient(data.patient);
@@ -70,7 +78,7 @@ export default function PatientPage({ params }: { params: { patientId: string } 
     };
 
     fetchPatient();
-  }, [params.patientId]);
+  }, [patientId]);
 
   useEffect(() => {
     const onDisconnected = () => {
@@ -167,8 +175,8 @@ export default function PatientPage({ params }: { params: { patientId: string } 
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm text-slate-400">Patient Detail</p>
-            <h1 className="text-2xl font-bold">{patient?.name || patient?.patient_id || params.patientId}</h1>
-            <p className="text-sm text-slate-400">ID: {patient?.patient_id || params.patientId}</p>
+            <h1 className="text-2xl font-bold">{patient?.name || patient?.patient_id || patientId}</h1>
+            <p className="text-sm text-slate-400">ID: {patient?.patient_id || patientId}</p>
             {patient?.location && <p className="text-sm text-slate-300">Location: {patient.location}</p>}
             {patient?.urgency && <p className="text-sm text-slate-300">Urgency: {patient.urgency}</p>}
             {patient?.timestamp && <p className="text-xs text-slate-500">Timestamp: {formatDate(patient.timestamp)}</p>}
@@ -262,7 +270,7 @@ export default function PatientPage({ params }: { params: { patientId: string } 
           {sessionStarted ? (
             <RoomContext.Provider value={room}>
               <RoomAudioRenderer />
-              <SessionView patientId={patient?.patient_id || params.patientId} onDisconnect={() => setSessionStarted(false)} />
+              <SessionView patientId={patient?.patient_id || patientId} onDisconnect={() => setSessionStarted(false)} />
             </RoomContext.Provider>
           ) : (
             <p className="text-slate-400 text-sm">Click "Join Call" to start the session and auto-join patient + doctor.</p>

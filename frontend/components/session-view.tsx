@@ -27,16 +27,18 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
 
   useEffect(() => {
     const handleParticipantsChange = () => {
-      if (room?.participants) {
-        setParticipants(room.participants.size);
+      if (room?.remoteParticipants) {
+        setParticipants(room.remoteParticipants.size);
       }
     };
 
-    room.on(RoomEvent.ParticipantsChanged, handleParticipantsChange);
+    room.on(RoomEvent.ParticipantConnected, handleParticipantsChange);
+    room.on(RoomEvent.ParticipantDisconnected, handleParticipantsChange);
     handleParticipantsChange();
 
     return () => {
-      room.off(RoomEvent.ParticipantsChanged, handleParticipantsChange);
+      room.off(RoomEvent.ParticipantConnected, handleParticipantsChange);
+      room.off(RoomEvent.ParticipantDisconnected, handleParticipantsChange);
     };
   }, [room]);
 
