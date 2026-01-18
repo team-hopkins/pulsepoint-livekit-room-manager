@@ -15,8 +15,8 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
   const [participants, setParticipants] = useState(0);
   const [doctorJoined, setDoctorJoined] = useState(false);
   const [doctorError, setDoctorError] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
 
-  // Subscribe to camera/screen tracks for all participants
   const tracks = useTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: true },
@@ -51,11 +51,11 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
 
       const data = await response.json();
 
-      setDoctorJoined(true);
-
-      // Copy invitation link for manual share
       const inviteUrl = `${window.location.origin}?token=${data.doctor_token}&roomId=${data.room_id}&patientId=${patientId}&likeKitUrl=${data.livekit_url}`;
-      navigator.clipboard.writeText(inviteUrl).catch(() => {});
+      setInviteLink(inviteUrl);
+      
+      await navigator.clipboard.writeText(inviteUrl);
+      setDoctorJoined(true);
     } catch (error) {
       setDoctorError(error instanceof Error ? error.message : 'Failed to invite doctor');
     }
@@ -80,7 +80,6 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-slate-900 to-slate-800">
-      {/* Header */}
       <div className="border-b border-slate-700 bg-slate-900/50 px-8 py-6 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div>
@@ -99,11 +98,9 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-10">
         <div className="w-full max-w-6xl">
           <div className="grid gap-6 lg:grid-cols-3 items-start">
-            {/* Agent Status */}
             <div className="rounded-2xl bg-slate-800/50 backdrop-blur border border-slate-700 p-8">
               <div className="flex flex-col items-center">
                 <div className="relative mb-4">
@@ -121,10 +118,34 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
                     {participants} participant{participants !== 1 ? 's' : ''} in room
                   </p>
                 </div>
+
+                <button
+                  onClick={inviteDoctor}
+                  disabled={doctorJoined}
+                  className={`mt-6 w-full rounded-lg px-4 py-2 font-semibold text-white transition-colors ${
+                    doctorJoined
+                      ? 'bg-green-600 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  {doctorJoined ? '✓ Link Copied' : 'Invite Doctor'}
+                </button>
+
+                {doctorError && (
+                  <p className="mt-2 text-xs text-red-400">{doctorError}</p>
+                )}
+
+                {inviteLink && (
+                  <div className="mt-4 w-full">
+                    <p className="text-xs text-slate-400 mb-2">Share this link:</p>
+                    <div className="bg-slate-900/50 border border-slate-700 rounded p-2 text-xs text-slate-300 break-all">
+                      {inviteLink}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Video Grid */}
             <div className="lg:col-span-2 rounded-2xl bg-slate-800/50 backdrop-blur border border-slate-700 p-4 md:p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -151,8 +172,7 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
             </div>
           </div>
 
-          {/* Info Cards */}
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 mt-6">
             <div className="rounded-lg bg-slate-800/30 border border-slate-700 p-4">
               <p className="text-xs font-semibold uppercase text-slate-400">Status</p>
               <p className="mt-2 text-lg font-semibold text-white">
@@ -176,7 +196,6 @@ export function SessionView({ patientId, onDisconnect }: SessionViewProps) {
         </div>
       </div>
 
-      {/* Footer */}
       <div className="border-t border-slate-700 bg-slate-900/50 px-8 py-4 backdrop-blur">
         <div className="mx-auto max-w-5xl text-center text-xs text-slate-400">
           Session in progress - Keep your microphone enabled for best results

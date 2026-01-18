@@ -370,8 +370,26 @@ async def list_patients(limit: int = 25):
         if SKIP_MONGO:
             raise HTTPException(status_code=503, detail="MongoDB disabled (SKIP_MONGO=1)")
 
-        cursor = patients_collection.find({}, {"patient_id": 1, "name": 1, "condition": 1, "urgency": 1, "updated_at": 1, "_id": 0}).limit(limit)
+        cursor = patients_collection.find(
+            {},
+            {
+                "patient_id": 1,
+                "name": 1,
+                "condition": 1,
+                "urgency": 1,
+                "output.urgency": 1,
+                "updated_at": 1,
+                "_id": 0,
+            },
+        ).limit(limit)
         patients = await cursor.to_list(length=limit)
+
+        for p in patients:
+            derived_urgency = p.get("urgency") or p.get("output", {}).get("urgency")
+            if derived_urgency:
+                p["urgency"] = derived_urgency
+            elif "urgency" not in p:
+                p["urgency"] = "NORMAL"
         return {
             "status": "success",
             "source": "mongodb",
@@ -613,6 +631,53 @@ async def doctor_join_room(request: DoctorJoinRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to add doctor to room: {str(e)}")
+
+@app.post("/doctor/{doctor_id}/join-patient/{patient_id}")
+async def doctor_join_patient_room(doctor_id: str, patient_id: str):
+    try:
+        # Deterministic room name
+        room_id = f"hackathon_{patient_id}"
+
+        # Optional MongoDB update (non-blocking)
+        try:
+            await patients_collection.update_one(
+                {"patient_id": patient_id},
+                {
+                    "$set": {
+                        "livekit_room.room_id": room_id,
+                        "livekit_room.status": "doctor_joined",
+                        "livekit_room.doctor_id": doctor_id,
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }
+                },
+                upsert=True,
+            )
+        except Exception:
+            pass  # MongoDB must not block hackathon flow
+
+        # Generate doctor token
+        doctor_token = api.AccessToken(
+            os.getenv("LIVEKIT_API_KEY"),
+            os.getenv("LIVEKIT_API_SECRET"),
+        )
+        doctor_token.with_identity(f"doctor_{doctor_id}")
+        doctor_token.with_name(f"Doctor {doctor_id}")
+        doctor_token.with_grants(api.VideoGrants(
+            room_join=True,
+            room=room_id,
+            can_publish=True,
+            can_subscribe=True,
+        ))
+
+        return {
+            "status": "success",
+            "room_id": room_id,
+            "doctor_token": doctor_token.to_jwt(),
+            "livekit_url": os.getenv("LIVEKIT_URL"),
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # New endpoint: Get patient room status
 @app.get("/patient/{patient_id}/room-status")

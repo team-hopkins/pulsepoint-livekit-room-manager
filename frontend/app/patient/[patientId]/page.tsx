@@ -123,17 +123,16 @@ export default function PatientPage({ params }: { params: { patientId: string } 
       if (!patientRes.ok) throw new Error(`Failed to get patient token (status ${patientRes.status})`);
       const patientData = await patientRes.json();
 
-      const doctorRes = await fetch(
-        `${baseUrl}/get-doctor-token?patient_id=${patient.patient_id}&doctor_id=${doctorId}`,
-        { method: "POST" }
-      );
+      const doctorRes = await fetch(`${baseUrl}/doctor/${doctorId}/join-patient/${patient.patient_id}`, {
+        method: "POST",
+      });
       if (!doctorRes.ok) throw new Error(`Failed to get doctor token (status ${doctorRes.status})`);
       const doctorData = await doctorRes.json();
 
       const frontendUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-      const patientLink = `${frontendUrl}?token=${encodeURIComponent(patientData.patient_token)}&roomId=${encodeURIComponent(
+      const patientLink = `${frontendUrl}/patient-join?token=${encodeURIComponent(patientData.patient_token)}&roomId=${encodeURIComponent(
         patientData.room_id
-      )}&patientId=${encodeURIComponent(patient.patient_id)}&likeKitUrl=${encodeURIComponent(patientData.livekit_url)}`;
+      )}&patientId=${encodeURIComponent(patient.patient_id)}&livekitUrl=${encodeURIComponent(patientData.livekit_url)}`;
 
       setJoinInfo({
         doctor_token: doctorData.doctor_token,

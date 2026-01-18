@@ -48,6 +48,13 @@ export default function Page() {
     return d.toLocaleString();
   };
 
+  const urgencyClass = (urgency?: string) => {
+    const level = (urgency || 'NORMAL').toUpperCase();
+    if (level === 'HIGH' || level === 'EMERGENCY') return 'bg-red-600/20 text-red-200 border-red-500/60';
+    if (level === 'MEDIUM') return 'bg-amber-500/20 text-amber-200 border-amber-400/60';
+    return 'bg-emerald-600/20 text-emerald-200 border-emerald-500/60';
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -79,7 +86,7 @@ export default function Page() {
                     <p className="font-semibold text-slate-100">{p.name || p.patient_id}</p>
                     <p className="text-xs text-slate-400">ID: {p.patient_id}</p>
                   </div>
-                  <span className="text-xs rounded-full px-2 py-1 bg-slate-800 border border-slate-700">
+                  <span className={`text-xs rounded-full px-2 py-1 border ${urgencyClass(p.urgency)}`}>
                     {p.urgency || 'NORMAL'}
                   </span>
                 </div>
