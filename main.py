@@ -386,15 +386,7 @@ async def complete_triage(triage_result: TriageResult):
         patient_meet_url = create_meet_url(room_data["livekit_url"], room_data["patient_token"])
         
         return {
-            "status": "success",
-            "message": "Triage complete, LiveKit room created",
-            "patient_id": triage_result.patient_id,
-            "room_id": room_data["room_id"],
-            "patient_token": room_data["patient_token"],
-            "livekit_url": room_data["livekit_url"],
-            "patient_meet_url": patient_meet_url,
-            "urgency": triage_urgency,
-            "mongodb_updated": update_result.modified_count > 0
+            "patient_meet_url": patient_meet_url
         }
     
     except ServerSelectionTimeoutError as e:
