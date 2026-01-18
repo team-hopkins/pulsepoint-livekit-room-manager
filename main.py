@@ -344,10 +344,10 @@ async def get_doctor_token(patient_id: str = "HACKATHON_USER", doctor_id: str = 
 
 @app.get("/patient/{patient_id}")
 async def get_patient(patient_id: str):
-    """Fetch a single patient record; falls back to mock data when MongoDB is unavailable."""
+    """Fetch a single patient record from MongoDB only."""
     try:
         if SKIP_MONGO:
-            raise RuntimeError("Mongo skipped")
+            raise HTTPException(status_code=503, detail="MongoDB disabled (SKIP_MONGO=1)")
 
         patient = await patients_collection.find_one({"patient_id": patient_id})
         if patient:
@@ -360,31 +360,15 @@ async def get_patient(patient_id: str):
             }
         raise HTTPException(status_code=404, detail="Patient not found")
     except Exception as e:
-        # Fallback to mock if Mongo errors during fetch or SKIP_MONGO used
-        print(f"MongoDB fetch failed, returning mock patient: {str(e)}")
-        return {
-            "status": "success",
-            "source": "mock",
-            "patient": {
-                "_id": "mock_error",
-                "patient_id": patient_id,
-                "name": "Fallback Patient",
-                "age": 40,
-                "condition": "General consultation",
-                "urgency": "MEDIUM",
-                "timestamp": datetime.now().isoformat(),
-                "symptoms": ["fatigue", "mild fever"],
-                "notes": "Mock data returned due to MongoDB error"
-            }
-        }
+        raise HTTPException(status_code=500, detail=f"Failed to fetch patient: {str(e)}")
 
 
 @app.get("/patients")
 async def list_patients(limit: int = 25):
-    """List patients for the doctor dashboard. Falls back to mock data when Mongo is skipped/unavailable."""
+    """List patients for the doctor dashboard from MongoDB only."""
     try:
         if SKIP_MONGO:
-            raise RuntimeError("Mongo skipped")
+            raise HTTPException(status_code=503, detail="MongoDB disabled (SKIP_MONGO=1)")
 
         cursor = patients_collection.find({}, {"patient_id": 1, "name": 1, "condition": 1, "urgency": 1, "updated_at": 1, "_id": 0}).limit(limit)
         patients = await cursor.to_list(length=limit)
@@ -394,28 +378,7 @@ async def list_patients(limit: int = 25):
             "patients": patients
         }
     except Exception as e:
-        print(f"MongoDB list failed, returning mock patients: {str(e)}")
-        mock_patients = [
-            {
-                "patient_id": "HACK_DEMO_1",
-                "name": "Demo Patient One",
-                "condition": "General consultation",
-                "urgency": "MEDIUM",
-                "updated_at": datetime.now().isoformat()
-            },
-            {
-                "patient_id": "HACK_DEMO_2",
-                "name": "Demo Patient Two",
-                "condition": "Follow-up",
-                "urgency": "LOW",
-                "updated_at": datetime.now().isoformat()
-            }
-        ]
-        return {
-            "status": "success",
-            "source": "mock",
-            "patients": mock_patients
-        }
+        raise HTTPException(status_code=500, detail=f"Failed to list patients: {str(e)}")
 
 @app.post("/hardware/input")
 async def receive_hardware_input(payload: HardwarePayload):
