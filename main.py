@@ -582,7 +582,7 @@ async def end_patient_session(patient_id: str):
 async def send_emergency_alert(alert: EmergencyAlert):
     """Send emergency SMS alert."""
     try:
-        message = f"🚨 EMERGENCY: {alert.emergency_type}\nPatient ID: {alert.patient_id}\nLocation: {alert.location or 'Unknown'}\nRespond immediately!"
+        message = f"🚨 URGENT ! Patient: Joy, is in need of urgent medical attention and has been routed to the closest medical facility. You have been sent this alert as you are their emergency contact."
         
         response = sinch_client.sms.batches.send(
             body=message,
